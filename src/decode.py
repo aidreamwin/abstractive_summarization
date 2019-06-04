@@ -27,6 +27,8 @@ import util
 import logging
 from unidecode import unidecode
 
+from db_data import dbdata
+
 FLAGS = tf.app.flags.FLAGS
 
 SECS_UNTIL_NEW_CKPT = 60  # max number of seconds before loading new checkpoint
@@ -98,6 +100,9 @@ class BeamSearchDecoder(object):
       original_article = batch.original_articles[0]  # string
       original_abstract = batch.original_abstracts[0]  # string
       original_abstract_sents = batch.original_abstracts_sents[0]  # list of strings
+      original_id = batch.original_ids[0]  # string
+      original_aid = batch.original_aids[0]  # string
+
 
       article_withunks = data.show_art_oovs(original_article, self._vocab) # string
       abstract_withunks = data.show_abs_oovs(original_abstract, self._vocab, (batch.art_oovs[0] if FLAGS.pointer_gen else None)) # string
@@ -120,7 +125,9 @@ class BeamSearchDecoder(object):
       decoded_output = ' '.join(decoded_words) # single string
 
       if FLAGS.single_pass:
-        self.write_for_rouge(original_abstract_sents, decoded_words, counter) # write ref summary and decoded summary to file, to eval with pyrouge later
+        # self.write_for_rouge(original_abstract_sents, decoded_words, counter) # write ref summary and decoded summary to file, to eval with pyrouge later
+        # print_results(article_withunks, abstract_withunks, decoded_output)
+        write_decode_result(original_article, "", decoded_output, original_id, original_aid)
         counter += 1 # this is how many examples we've decoded
       else:
         print_results(article_withunks, abstract_withunks, decoded_output) # log output to screen
@@ -160,9 +167,8 @@ class BeamSearchDecoder(object):
 
     # pyrouge calls a perl script that puts the data into HTML files.
     # Therefore we need to make our output HTML safe.
-    decoded_sents = [self.remove_non_ascii(make_html_safe(w)) for w in decoded_sents]
-    reference_sents = [self.remove_non_ascii(make_html_safe(w)) for w in reference_sents]
-
+    # decoded_sents = [self.remove_non_ascii(make_html_safe(w)) for w in decoded_sents]
+    # reference_sents = [self.remove_non_ascii(make_html_safe(w)) for w in reference_sents]
     # Write to file
     ref_file = os.path.join(self._rouge_ref_dir, "%06d_reference.txt" % ex_index)
     decoded_file = os.path.join(self._rouge_dec_dir, "%06d_decoded.txt" % ex_index)
@@ -201,6 +207,15 @@ class BeamSearchDecoder(object):
     with open(output_fname, 'w') as output_file:
       json.dump(to_write, output_file)
     tf.logging.info('Wrote visualization data to %s', output_fname)
+
+def write_decode_result(article, abstract, decoded_output, id, aid):
+  d = (id, aid, "", decoded_output, article)
+  try:
+    dbdata.insert_keyword_session([d])
+  except Exception as e:
+    print(e)
+  # with open("../log/result.txt","a") as f:
+  #   f.write("id={}, aid={}, {} | {} | {}\n".format(id,aid,decoded_output,abstract,article))
 
 
 def print_results(article, abstract, decoded_output):

@@ -33,7 +33,7 @@ FLAGS = tf.app.flags.FLAGS
 class Example(object):
   """Class representing a train/val/test example for text summarization."""
 
-  def __init__(self, article, abstract_sentences, vocab, hps):
+  def __init__(self, article, abstract_sentences, vocab, hps, id, aid):
     """Initializes the Example, performing tokenization and truncation to produce the encoder, decoder and target sequences, which are stored in self.
 
     Args:
@@ -42,6 +42,8 @@ class Example(object):
       vocab: Vocabulary object
       hps: hyperparameters
     """
+    self.id = id
+    self.aid = aid
     self.hps = hps
 
     # Get ids of special tokens
@@ -218,6 +220,8 @@ class Batch(object):
   def store_orig_strings(self, example_list):
     """Store the original article and abstract strings in the Batch object"""
     self.original_articles = [ex.original_article for ex in example_list] # list of lists
+    self.original_ids = [ex.id for ex in example_list] # list of id
+    self.original_aids = [ex.aid for ex in example_list] # list of aid
     self.original_abstracts = [ex.original_abstract for ex in example_list] # list of lists
     self.original_abstracts_sents = [ex.original_abstract_sents for ex in example_list] # list of list of lists
 
@@ -300,7 +304,7 @@ class Batcher(object):
 
     while True:
       try:
-        (article, abstract) = next(input_gen) # read the next example from file. article and abstract are both strings.
+        (article, abstract, id, aid) = next(input_gen) # read the next example from file. article and abstract are both strings.
       except StopIteration: # if there are no more examples:
         tf.logging.info("The example generator for this example queue filling thread has exhausted data.")
         if self._single_pass:
@@ -311,7 +315,7 @@ class Batcher(object):
           raise Exception("single_pass mode is off but the example generator is out of data; error.")
 
       abstract_sentences = [sent.strip() for sent in data.abstract2sents(abstract)] # Use the <s> and </s> tags in abstract to get a list of sentences.
-      example = Example(article, abstract_sentences, self._vocab, self._hps) # Process into an Example.
+      example = Example(article, abstract_sentences, self._vocab, self._hps, id, aid) # Process into an Example.
       self._example_queue.put(example) # place the Example in the example queue.
 
   def fill_batch_queue(self):
@@ -369,10 +373,18 @@ class Batcher(object):
     while True:
       e = next(example_generator) # e is a tf.Example
       try:
-        article_text = e.features.feature['article'].bytes_list.value[0].decode() # the article text was saved under the key 'article' in the data files
-        abstract_text = e.features.feature['abstract'].bytes_list.value[0].decode() # the abstract text was saved under the key 'abstract' in the data files
+        article_text = e.features.feature['sentence'].bytes_list.value[0].decode() # the article text was saved under the key 'article' in the data files
+        abstract_text = e.features.feature['label'].bytes_list.value[0].decode() # the abstract text was saved under the key 'abstract' in the data files
+        id = e.features.feature['id'].bytes_list.value[0].decode()
+        aid = e.features.feature['aid'].bytes_list.value[0].decode()
+        # print(abstract_text)
+        # exit()
       except ValueError:
         tf.logging.error('Failed to get article or abstract from example')
+        continue
+
+      except Exception as e:
+        tf.logging.error("text_generator ERROR:\n{}".format(e))
         continue
       if len(article_text)==0: # See https://github.com/abisee/pointer-generator/issues/1
         tf.logging.warning('Found an example with empty article text. Skipping it.')
@@ -380,4 +392,4 @@ class Batcher(object):
         if self._single_pass and cnt < self._decode_after: #skip already decoded docs
           cnt +=1
           continue
-        yield (article_text, abstract_text)
+        yield (article_text, abstract_text,id,aid)
