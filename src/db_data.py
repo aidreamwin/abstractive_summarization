@@ -16,7 +16,7 @@ class Config(object):
 	passwd="123456"
 	db="textsum"
 	poolSize=3
-from mlog import mlog
+from mlog.mlog import mlog
 
 class Data(object):
 	"""docstring for Data"""

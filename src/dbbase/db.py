@@ -4,7 +4,9 @@ import time
 import pymysql
 import threading
 
-from mlog import mlog
+import sys
+sys.path.append("..")
+from mlog.mlog import mlog
 
 class MyDBConnect(object):
 	def __init__(self):
