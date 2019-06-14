@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import db
+from dbbase import db
 
 # really
 # class Config(object):

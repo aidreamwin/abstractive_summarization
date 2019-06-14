@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*- 
 # Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 # Modifications Copyright 2017 Abigail See
 #
@@ -24,6 +25,15 @@ from collections import Counter
 from sklearn.preprocessing import normalize
 
 FLAGS = tf.app.flags.FLAGS
+
+import pickle
+
+with open("../data/filter/keyword_set_8659.bin","rb") as kf:
+    filter_keyword_set = pickle.load(kf)
+    
+with open("../data/filter/keyword_filter_list_32074.bin","rb") as ff:
+    filter_total_list = pickle.load(ff)
+
 
 class Hypothesis(object):
   """Class to represent a hypothesis during beam search. Holds all the information needed for the hypothesis."""
@@ -178,11 +188,16 @@ def run_beam_search(sess, model, vocab, batch, dqn = None, dqn_sess = None, dqn_
                            attn_dist=attn_dist,
                            p_gen=p_gen,
                            coverage=new_coverage_i)
+        # if filter_hyps(new_hyp, vocab, batch, filter_total_list):
+        #   continue
+
         all_hyps.append(new_hyp)
 
     # Filter and collect any hypotheses that have produced the end token.
     hyps = []  # will contain hypotheses for the next step
     for h in sort_hyps(all_hyps):  # in order of most likely h
+      # if filter_hyps(new_hyp, vocab, batch, list(filter_keyword_set)):
+      #     continue
       if h.latest_token == vocab.word2id(data.STOP_DECODING):  # if stop token is reached...
         # If this hypothesis is sufficiently long, put in results. Otherwise discard.
         if steps >= FLAGS.min_dec_steps:
@@ -203,9 +218,32 @@ def run_beam_search(sess, model, vocab, batch, dqn = None, dqn_sess = None, dqn_
   # Sort hypotheses by average log probability
   hyps_sorted = sort_hyps(results)
 
+  for tmp in hyps_sorted:
+    if not filter_hyps(tmp, vocab, batch, list(filter_keyword_set)):
+      return tmp
+
   # Return the hypothesis with highest average log prob
   return hyps_sorted[0]
 
 def sort_hyps(hyps):
   """Return a list of Hypothesis objects, sorted by descending average log probability"""
   return sorted(hyps, key=lambda h: h.avg_log_prob, reverse=True)
+
+'''筛选过滤生成的关键词'''
+def filter_hyps(hyps, vocab, batch, vocab_filter):
+  # return False
+  words = data.outputids2words(hyps.tokens[1:], vocab, (batch.art_oovs[0] if FLAGS.pointer_gen else None))
+
+  try:
+    fst_stop_idx = words.index(data.STOP_DECODING) # index of the (first) [STOP] symbol
+    words = words[:fst_stop_idx]
+  except ValueError:
+    words = words
+  decoded_output = ''.join(words) # single string
+
+  # words = data.outputids2words(hyps.tokens, vocab, None)
+  if decoded_output not in vocab_filter:
+    print("ERROR ",decoded_output, len(vocab_filter))
+    return True
+  print("SUCCESS ",decoded_output, len(vocab_filter))
+  return False

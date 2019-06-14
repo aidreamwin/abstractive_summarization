@@ -6,7 +6,7 @@ python run_summarization.py \
 --vocab_path=../data/token_vocab/merge_vocab.txt \
 --log_root=../log \
 --exp_name=base_dropout_0.85 \
---batch_size=20 \
+--batch_size=80 \
 --use_temporal_attention=False \
 --intradecoder=False \
 --eta=0 \
